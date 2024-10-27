@@ -76,6 +76,8 @@ jobs:
     needs:
       - vars-config
       - artifact-publish
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
