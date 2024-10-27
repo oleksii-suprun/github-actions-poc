@@ -24,12 +24,13 @@ jobs:
       - run: echo "🍏 This job's status is ${{ job.status }}."
 
   trigger-deploy-dev:
-    name: 🚀 Deploy
+    name: 🚀 Trigger DEV deploy
     needs: demo
     if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/github-script@v7
+      - name: Dispatch event
+        uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.DEPLOY_REPO_ACTIONS_PAT }}
           script: |
@@ -40,4 +41,46 @@ jobs:
               client_payload: {
                 "target_verison": "1.1.1"
               }
+            });
+
+  open-deploy-pr:
+    name: 🔀 Open deployment PR
+    needs: demo
+    if: startsWith(github.ref, 'refs/heads/release/v') || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      VERSION: "1.2.3"
+    steps:
+      - name: ⬇️ Checkout
+        uses: actions/checkout@v4
+        with:
+          repository: oleksii-suprun/github-actions-poc-deploy
+          # token:
+          sparse-checkout: state
+
+      - name: 🩹 Patch stage version
+        run: |
+          BRANCH_NAME="deploy/stage-v${{ env.VERSION }}"
+
+          git checkout -b $BRANCH_NAME
+          yq e -i '.artifact.version = "${{ env.VERSION }}"' state/stage.yaml
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Deploying version `${{ env.VERSION }}` to STAGE"
+          git push origin $BRANCH_NAME
+
+      - name: 🔀 Open Pull Request
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.DEPLOY_REPO_ACTIONS_PAT }}
+          script: |
+            octokit.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: 'github-actions-poc-deploy',
+              head: '$BRANCH_NAME',
+              base: 'main',
+              title: 'Deploying version `${{ env.VERSION }}` to STAGE',
+              body: 'Please pull these awesome changes in!'
             });
