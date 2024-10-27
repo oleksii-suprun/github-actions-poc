@@ -4,8 +4,8 @@ run-name: ${{ github.actor }} is testing out GitHub Actions 🚀
 
 on:
   push:
-    paths-ignore:
-      - ".github/**"
+    # paths-ignore:
+      # - ".github/**"
 
 jobs:
   demo:
@@ -32,12 +32,11 @@ jobs:
         with:
           github-token: ${{ secrets.DEPLOY_REPO_ACTIONS_PAT }}
           script: |
-            await github.rest.actions.createworkflowDispatch({
-                owner: 'oleksii-suprun',
-                repo: 'github-actions-poc-deploy',
-                workflow_id: 'deploy.yml',
-                ref: 'main',
-                inputs: {
-                  target_verison: "1.1.1"
-                }
-            })
+            await github.rest.repos.createDispatchEvent({
+              owner: context.repo.owner,
+              repo: 'github-actions-poc-deploy',
+              event_type: 'deploy_dev_snapshot',
+              client_payload: {
+                "target_verison": "1.1.1"
+              }
+            });
