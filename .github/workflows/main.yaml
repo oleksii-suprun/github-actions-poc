@@ -2,7 +2,10 @@ name: Main
 
 run-name: ${{ github.actor }} is testing out GitHub Actions 🚀
 
-on: [push]
+on:
+  push:
+    paths-ignore:
+      - ".github/**"
 
 jobs:
   demo:
@@ -19,3 +22,22 @@ jobs:
         run: |
           ls ${{ github.workspace }}
       - run: echo "🍏 This job's status is ${{ job.status }}."
+
+  deploy-dev:
+    needs: demo
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.DEPLOY_REPO_ACTIONS_PAT }}
+          script: |
+            await github.rest.actions.createworkflowDispatch({
+                owner: 'oleksii-suprun',
+                repo: 'github-actions-poc-deploy',
+                workflow_id: 'deploy.yml',
+                ref: 'main',
+                inputs: {
+                  target_verison: "1.1.1"
+                }
+            })
