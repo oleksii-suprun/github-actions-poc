@@ -68,7 +68,6 @@ jobs:
           echo "branch=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
 
       - name: 🩹 Patch stage version
-        if: startsWith(github.ref, 'refs/heads/release/v')
         run: yq e -i '.artifact.version = "${{ env.VERSION }}"' state/stage.yaml
 
       - name: 🩹 Patch prod version
