@@ -53,6 +53,8 @@ jobs:
     needs:
       - vars-config
       - artifact-publish
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/heads/release/v')
     steps:
