@@ -71,6 +71,26 @@ jobs:
               generate_release_notes: true
             });
 
+  create-release:
+    needs:
+      - vars-config
+      - artifact-publish
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Create Release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: 'v${{ needs.vars-config.outputs.artifact-version }}',
+              target_commitish: '${{ github.sha }}',
+              make_latest: 'true',
+              generate_release_notes: true
+            });
+
   trigger-deploy-dev:
     name: 🚀 Trigger DEV deploy
     needs:
@@ -97,6 +117,7 @@ jobs:
     name: 🔀 Open deployment PR
     needs:
       - create-pre-release
+      - create-release
       - artifact-publish
       - vars-config
     if: startsWith(github.ref, 'refs/heads/release/v') || github.ref == 'refs/heads/main'
@@ -133,6 +154,7 @@ jobs:
 
       - name: 🔀 Open Pull Request
         uses: actions/github-script@v7
+        if: always() && !failure() && !cancelled()
         with:
           github-token: ${{ secrets.DEPLOY_REPO_ACTIONS_PAT }}
           script: |
