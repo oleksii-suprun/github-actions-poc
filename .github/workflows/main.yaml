@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/heads/release/v')
     steps:
-      - name: 🏷️ Create Release
+      - name: Create Release
         uses: actions/github-script@v7
         with:
           script: |
@@ -72,6 +72,7 @@ jobs:
             });
 
   create-release:
+    name: 🏷️ Create release
     needs:
       - vars-config
       - artifact-publish
