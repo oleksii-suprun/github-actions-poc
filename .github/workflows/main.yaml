@@ -23,7 +23,8 @@ jobs:
           ls ${{ github.workspace }}
       - run: echo "🍏 This job's status is ${{ job.status }}."
 
-  deploy-dev:
+  trigger-deploy-dev:
+    name: 🚀 Deploy
     needs: demo
     if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
