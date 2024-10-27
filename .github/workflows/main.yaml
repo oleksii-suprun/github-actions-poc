@@ -8,7 +8,8 @@ on:
       # - ".github/**"
 
 jobs:
-  demo:
+  build:
+    name: 📦 Build artifact
     runs-on: ubuntu-latest
     steps:
       - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
@@ -23,9 +24,56 @@ jobs:
           ls ${{ github.workspace }}
       - run: echo "🍏 This job's status is ${{ job.status }}."
 
+  vars-config:
+    name: 🎛️ Configure variables
+    runs-on: ubuntu-latest
+    outputs:
+      artifact-version: ${{ steps.vars.outputs.artifact_version }}
+      is-release-candidate: ${{ steps.vars.outputs.is_release_candidate }}
+      is-snapshot: ${{ steps.vars.outputs.is_snapshot }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set version vars
+        id: vars
+        run: |
+          ARTIFACT_VERSION=$(cat version.txt)
+          echo "artifact_version=$ARTIFACT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "is_release_candidate=$( [[ $ARTIFACT_VERSION =~ .*[0-9]+-rc\.[0-9]+ ]] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+          echo "is_snapshot=$( [[ "$ARTIFACT_VERSION" =~ .*[0-9]+-SNAPSHOT ]] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+
+  artifact-publish:
+    name: ⬆️ Publish artifact
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Publishing artifact with to repository"
+
+  create-pre-release:
+    name: 🏷️ Draft release
+    needs:
+      - vars-config
+      - artifact-publish
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/heads/release/v')
+    steps:
+      - name: Create Release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: 'v${{ needs.vars-config.outputs.artifact-version }}',
+              target_commitish: '${{ github.sha }}',
+              prerelease: true,
+              generate_release_notes: true
+            });
+
   trigger-deploy-dev:
     name: 🚀 Trigger DEV deploy
-    needs: demo
+    needs:
+      - vars-config
+      - artifact-publish
     if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     steps:
@@ -39,17 +87,18 @@ jobs:
               repo: 'github-actions-poc-deploy',
               event_type: 'deploy_dev_snapshot',
               client_payload: {
-                "target_verison": "1.1.1"
+                "target_verison": "${{ needs.vars-config.outputs.artifact-version }}"
               }
             });
 
   open-deploy-pr:
     name: 🔀 Open deployment PR
-    needs: demo
+    needs:
+      - create-pre-release
+      - artifact-publish
+      - vars-config
     if: startsWith(github.ref, 'refs/heads/release/v') || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    env:
-      VERSION: "1.2.3"
     steps:
       - name: ⬇️ Checkout
         uses: actions/checkout@v4
@@ -61,23 +110,23 @@ jobs:
       - name: ✨ Create branch
         id: create-branch
         run: |
-          BRANCH_NAME="deploy/${{ github.event.repository.name }}/v${{ env.VERSION }}"
+          BRANCH_NAME="deploy/${{ github.event.repository.name }}/v${{ needs.vars-config.outputs.artifact-version }}"
           git checkout -b $BRANCH_NAME
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           echo "branch=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
 
       - name: 🩹 Patch stage version
-        run: yq e -i '.artifact.version = "${{ env.VERSION }}"' state/stage.yaml
+        run: yq e -i '.artifact.version = "${{ needs.vars-config.outputs.artifact-version }}"' state/stage.yaml
 
       - name: 🩹 Patch prod version
         if: github.ref == 'refs/heads/main'
-        run: yq e -i '.artifact.version = "${{ env.VERSION }}"' state/prod.yaml
+        run: yq e -i '.artifact.version = "${{ needs.vars-config.outputs.artifact-version }}"' state/prod.yaml
 
       - name: ⬆️ Commit changes
         run: |
           git add .
-          git commit -m "🤖 Deploying \`${{ github.event.repository.name }}@v${{ env.VERSION }}\`"
+          git commit -m "🤖 Deploying \`${{ github.event.repository.name }}@v${{ needs.vars-config.outputs.artifact-version }}\`"
           git push origin ${{ steps.create-branch.outputs.branch }}
 
       - name: 🔀 Open Pull Request
@@ -90,6 +139,6 @@ jobs:
               repo: 'github-actions-poc-deploy',
               head: '${{ steps.create-branch.outputs.branch }}',
               base: 'main',
-              title: '🤖 Deploying `${{ github.event.repository.name }}@v${{ env.VERSION }}`',
+              title: '🤖 Deploying `${{ github.event.repository.name }}@v${{ needs.vars-config.outputs.artifact-version }}`',
               body: 'This PR is automatically created by push to [${{ github.event.repository.name }}/${{ github.ref_name }}](https://github.com/${{ github.repository }}/tree/${{ github.ref_name }})\nCommit SHA: `${{ github.sha }}`'
             });
